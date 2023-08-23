@@ -1,19 +1,22 @@
 %%%%%%%%%%%%%%%%%%%%%%Load Data Section Start%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Note:all the velocity inside the software besides the upwind_velocity suppose to be speed,wrong name of
+%variable
 
 %Define ROI
 clear data_unique;
 
 %%
 %Import the data 
-data = readmatrix('choice_20230807_114411_N3_trackedobjects.csv');
+data = readmatrix('choice_20230811_123913_N1_trackedobjects.csv');
 %%
 %Import the stimulus
-stimulus=readmatrix('choice_20230807_114411_stimuli.csv');
+stimulus=readmatrix('choice_20230811_123913_stimuli.csv');
 %%
 %trimming the data using the ROI
 x_position_raw=data(:,2);
 y_position_raw=data(:,3);
-fly_num=3;
+fly_num=1;
+
 if fly_num==1
 y_position_raw(y_position_raw<=239-4 | y_position_raw>=827-4)=nan;
 x_position_raw(x_position_raw<=310-4 | x_position_raw>=490-4)=nan;
@@ -30,6 +33,7 @@ elseif fly_num==4
 y_position_raw(y_position_raw<=245-4 | y_position_raw>=822-4)=nan;
 x_position_raw(x_position_raw<=944-4 | x_position_raw>=1112-4)=nan;
 end
+
 data(:,2)=x_position_raw;
 data(:,3)=y_position_raw;
 
@@ -37,19 +41,18 @@ data(:,3)=y_position_raw;
 time=data(:,1);
 x_position=data(:,2);
 y_position=data(:,3);
-
 %%
 %find the jumping dot
 for i=1:10
-if sum(x_position==mode(x_position))>200
+if sum(x_position==mode(x_position))>5000
     x_position(x_position==mode(x_position))=nan;
 end
-if sum(y_position==mode(y_position))>200
+if sum(y_position==mode(y_position))>5000
     y_position(y_position==mode(y_position))=nan;
 end
 end
 for i=1:length(x_position)-1
-    if(x_position(i,1)>x_position(i+1,1)*2|x_position(i,1)<x_position(i+1,1)*0.1)
+    if(x_position(i,1)>x_position(i+1,1)*2||x_position(i,1)<x_position(i+1,1)*0.1)
         x_position(i,1)=nan;
     end
     if(y_position(i,1)>y_position(i+1,1)*2|y_position(i,1)<y_position(i+1,1)*0.1)
@@ -92,11 +95,13 @@ data_unique(:,3)=y_position;
 data_unique(:,1)=time;
 %%
 %replace the first jumping point with the a previous valid data
-[~, idx] = unique(data_unique(:,1),'first');
+
+[~, idx] = unique(data_unique(:,1),'last');
 data_unique = data_unique(idx,:);
 x_position=data_unique(:,2);
 y_position=data_unique(:,3);
 time=data_unique(:,1);
+
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%velocity%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %compute the velocity
@@ -190,10 +195,10 @@ after_odor=during_odor_off+(post_stimulus_duration)/real_time_converter;
 %%
 %create a pid delay for data used to measure the flies response when it actually encounter the odor;it takes 4s from top arrive to the bottom
 %first get the y_position
-pid_delay=(y_position(before_odor)-235)./(810-235)*7;
+pid_delay=(y_position(before_odor)-235)./(810-235)*1;
 pid_delay=pid_delay./real_time_converter;
 
-trial_info_matrix=horzcat(before_odor,during_odor_on,during_odor_on+pid_delay+0,during_odor_on+pid_delay+2/real_time_converter,during_odor_off,after_odor);%columns contain before,during and after odor information
+trial_info_matrix=horzcat(before_odor,during_odor_on,during_odor_on+pid_delay+2,during_odor_on+pid_delay+3/real_time_converter,during_odor_off,after_odor);%columns contain before,during and after odor information
 %then let's get the upwind_velocity of before after and during in a array
 %that composes individual trail
 %%
@@ -231,17 +236,9 @@ end
 %select for the top 20% within the stimulus to counter the stimulus late
 %arrival due to the position of fruit flies in the chamber
 %update:the parameter is set to 0.01,which means no effect
-threshold_top_20=prctile(upwind_velocity_seg_during,0.01);
-upwind_velocity_seg_during_top_20=upwind_velocity_seg_during;
-upwind_velocity_seg_during_top_20(:)=0;
-for i=1:length(before_odor)
-upwind_velocity_seg_during_top_20(:,i)=(upwind_velocity_seg_during(:,i)>threshold_top_20(1,i))
-end
-upwind_velocity_seg_during_filtered=upwind_velocity_seg_during.*upwind_velocity_seg_during_top_20;
-upwind_velocity_seg_during_filtered(upwind_velocity_seg_during_filtered==0)=nan;
 for i=1:length(before_odor)
 avg_upwind_velocity_before(i,1)=mean(upwind_velocity_seg_before(:,i));
-avg_upwind_velocity_during(i,1)=nanmean(upwind_velocity_seg_during_filtered(:,i));
+avg_upwind_velocity_during(i,1)=nanmean(upwind_velocity_seg_during(:,i));
 avg_upwind_velocity_after(i,1)=mean(upwind_velocity_seg_after(:,i));
 end
 %do the same thing for ground speed
@@ -254,7 +251,7 @@ end
 %do the same thing 
 %%
 %create a filter where speed<1mm trials are filtered out
-avg_velocity_total=(avg_velocity_during+avg_velocity_before)/2;
+avg_velocity_total=avg_velocity_before;
 avg_upwind_velocity_after(avg_velocity_total<1)=nan;
 avg_upwind_velocity_before(avg_velocity_total<1)=nan;
 avg_upwind_velocity_during(avg_velocity_total<1)=nan;
@@ -263,14 +260,14 @@ avg_upwind_velocity_during(avg_velocity_total<1)=nan;
 total_avg_upwind_velocity=horzcat(avg_upwind_velocity_before,avg_upwind_velocity_during);
 [h,p]=ttest(total_avg_upwind_velocity(:,1),total_avg_upwind_velocity(:,2),'Alpha',0.05);
 display(h);
-if nanmean(velocity)<1.25
+if nanmean(velocity)<1
     disp("discard,moving speed");
 end
-if nansum(sqrt(diff(x_position).^2+diff(y_position).^2))/4<50
+if nansum(sqrt(diff(x_position).^2+diff(y_position).^2))/4<25
     disp("discard,moving distance")
 end
-if sum(isnan(avg_upwind_velocity_during))>0.8*length(avg_upwind_velocity_during)
-    disp("discard,not representative")
+if sum(isnan(avg_upwind_velocity_during))>0.5*length(avg_upwind_velocity_during)
+    disp("discard,can't represent individual moving speed")
 end
 %also based on the graph plotted,if significant tracking error,discard it
 %manually,like a lot of straight lines
@@ -316,3 +313,4 @@ colormap(copper); % Change colormap
 colorbar;
 hold off
 %}
+
